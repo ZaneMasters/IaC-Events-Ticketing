@@ -13,7 +13,6 @@ on:
 
 env:
   AWS_REGION: "us-east-1" # Cambia esto a la región en la que estés trabajando
-  AWS_PROFILE: "default"  # Añadido para que terraform no falle al buscar este perfil
 
 jobs:
   terraform:
