@@ -5,11 +5,42 @@ Este proyecto contiene la definición de infraestructura de la plataforma reacti
 ## Arquitectura Cloud-Native (AWS)
 La solución está enfocada en componentes "Serverless" y administrados bajo los principios de *Elasticidad y Alta Disponibilidad*.
 
+### 📊 Diagrama de Arquitectura
+
+```mermaid
+graph TD
+    User([Usuario/Cliente API]) -->|Petición HTTP| API_GW[API Gateway V2]
+    API_GW -->|HTTP Proxy| ALB[Application Load Balancer]
+    
+    subgraph VPC [VPC Privada]
+      ALB -->|Ruteo| ECS[ECS Fargate Cluster]
+      ECS -->|Contenedores de Spring Boot| App[Ticketing App]
+    end
+
+    App -->|Asíncrono| SQS[SQS Orders Queue]
+    App -->|Síncrono/Bloqueos| DynamoDB[(DynamoDB Tables)]
+
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:white;
+    classDef internal fill:#116611,stroke:#003300,stroke-width:2px,color:white;
+    class API_GW,ALB,SQS,DynamoDB aws;
+    class App internal;
+```
+
+### 🎯 Decisiones Arquitectónicas (ADR)
+
+1. **ECS Fargate (Compute)**: Se eligió Fargate en lugar de EC2 tradicionales o EKS (Kubernetes) porque simplifica la administración operativa. No hay servidores que parchear ni escalar manualmente; Fargate provisiona exactamente los recursos de CPU/RAM necesarios por cada tarea de Spring Boot, reduciendo la superficie de ataque y ajustando el costo a la ejecución.
+2. **API Gateway V2 + ALB (Networking/Proxy)**: El servicio Spring Boot se expone a través de un Load Balancer dentro de la red privada (VPC). API Gateway actúa como proxy público. **¿Por qué dos capas?** API Gateway nos permite incorporar fácilmente "Throttling" (límites de peticiones) futuros, validaciones de tokens JWT nativas y unificado de APIs sin tocar el código Java. El ALB se encarga del balanceo distribuido hacia los contenedores.
+3. **DynamoDB (Base de datos)**: Elegida por encima de RDS para persistencia por su modo *On-Demand* y su integración natural con sistemas altamente concurrentes sin necesidad de administrar *connection pools* (problema típico en bases relacionales bajo gran carga). Además, soporta Transacciones (ACID) perfectas para la reserva de tickets (Optimistic Locking).
+4. **SQS (Mensajería)**: Sistema de colas Standard utilizado para procesar y "aplanar" la de curva de procesamiento de pagos/notificaciones de pedidos. Frente a ráfagas de compra, SQS absorberá los eventos para que la aplicación no colapse y los vaya procesando a su propio ritmo.
+5. **CI/CD Pipeline (GitHub Actions)**: Se decidió separar el ciclo de infraestructura (*IaC*) del código aplicativo. Utilizando un State backend `s3` y bloqueos con `dynamodb_table`, los despliegues con Terraform se automatizan de manera inmutable y segura cada vez que se hace un *Push* o *Pull Request* al repositorio.
+
+### 🏗️ Desglose de Módulos Terraform
+
 1. **Networking (`modules/networking`)**: Crea una Virtual Private Cloud (VPC) con subredes públicas (para el ALB / IGW) y privadas (donde residen los contenedores de la aplicación) en dos Zonas de Disponibilidad distintas.
-2. **Compute (`modules/compute`)**: Define la ejecución inmutable utilizando contenedores en **ECS Fargate**. Incluye el repositorio **ECR** para subir la imagen generada por Spring Boot, Grupos de Seguridad (SGs), el Application Load Balancer (ALB) y las políticas y roles (IAM) correctos bajo el principio de menor privilegio.
-3. **Database (`modules/dynamodb`)**: Provisiona **DynamoDB** con el modo On-Demand (Pagos por Petición) para evitar sobrecargos por capacidad ociosa, asegurando latencia debajo de 10ms.
-4. **Messaging (`modules/sqs`)**: Crea la cola asíncrona estándar de SQS encargada de gestionar los picos de pedidos (Orders).
-5. **API Gateway (`modules/apigateway`)**: Actúa como un proxy de entrada expuesto que dirige tráfico al ALB interno, proporcionando la primera barrera de throttling si se requieren extensiones posteriores.
+2. **Compute (`modules/compute`)**: Define la ejecución inmutable utilizando contenedores en ECS Fargate con ECR para almacenar las imágenes.
+3. **Database (`modules/dynamodb`)**: Provisiona DynamoDB (Eventos y Tickets).
+4. **Messaging (`modules/sqs`)**: Crea la cola asíncrona de pedidos.
+5. **API Gateway (`modules/apigateway`)**: Actúa como un proxy de entrada expuesto que dirige tráfico al ALB interno.
 
 ---
 
