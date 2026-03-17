@@ -7,7 +7,7 @@ resource "aws_apigatewayv2_api" "http_api" {
 resource "aws_apigatewayv2_integration" "alb_integration" {
   api_id           = aws_apigatewayv2_api.http_api.id
   integration_type = "HTTP_PROXY"
-  integration_uri  = var.alb_listener_arn # ALB Listener ARN
+  integration_uri  = "http://${var.alb_dns_name}" # URI requires a valid HTTP endpoint for HTTP_PROXY
   
   # For HTTP APIs hitting public ALBs, method ANY and proxy works.
   # If ALB was fully private, a VPC Link would be needed here. 
