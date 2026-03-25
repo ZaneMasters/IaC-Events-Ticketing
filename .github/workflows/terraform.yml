@@ -58,5 +58,8 @@ jobs:
       #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       #   run: terraform apply -auto-approve tfplan
 
+      - name: Update ECR State (force_delete)
+        run: terraform apply -target="module.compute.aws_ecr_repository.app" -auto-approve
+
       - name: Terraform Destroy
         run: terraform destroy -auto-approve
