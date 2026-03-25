@@ -49,11 +49,14 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
-      - name: Terraform Plan
-        id: plan
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-        run: terraform plan -no-color -out=tfplan
+      # - name: Terraform Plan
+      #   id: plan
+      #   if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+      #   run: terraform plan -no-color -out=tfplan
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve tfplan
+      # - name: Terraform Apply
+      #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      #   run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
